@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#10122b">
+  <title>Esquiva Roks Mike</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body { margin: 0; min-height: 100dvh; overflow: hidden; overscroll-behavior: none; display: grid; place-items: center; background: radial-gradient(circle at 50% 20%, #26346e, #090a19 70%); font-family: system-ui, -apple-system, sans-serif; touch-action: none; }
+    #game { width: min(100vw, 520px); height: 100dvh; max-height: 900px; display: block; background: #10122b; }
+    #overlay { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; background: linear-gradient(#10122bbb, #10122be8); }
+    .card { width: min(390px, 100%); padding: 30px 24px; border: 1px solid #7c7dff; border-radius: 28px; background: #171a3ddd; box-shadow: 0 0 45px #6d5cff66; }
+    h1 { margin: 0 0 8px; color: #fff; font-size: clamp(2rem, 9vw, 3rem); letter-spacing: .05em; }
+    p { color: #d8dcff; line-height: 1.5; }
+    button { width: 100%; border: 0; border-radius: 18px; padding: 17px; margin-top: 14px; color: #10122b; background: #75f5d0; font: 800 1.05rem system-ui; cursor: pointer; box-shadow: 0 5px 0 #32a88f; }
+    button:active { transform: translateY(4px); box-shadow: 0 1px 0 #32a88f; }
+    .small { font-size: .85rem; color: #9fa8df; }
+    [hidden] { display: none !important; }
+    #shoot { position: fixed; bottom: max(22px, env(safe-area-inset-bottom)); right: max(20px, env(safe-area-inset-right)); width: 104px; height: 104px; border: 3px solid #f6d366; border-radius: 50%; padding: 0; margin: 0; color: #fff; background: #d47135e8; font: 900 .9rem system-ui; letter-spacing: .06em; box-shadow: 0 5px 0 #87351f, 0 0 22px #ff9e5b; z-index: 2; }
+    #shoot:active { transform: translateY(4px) scale(.96); box-shadow: 0 1px 0 #87351f; }
+  </style>
+</head>
+<body>
+  <canvas id="game" aria-label="Juego Esquiva Neon"></canvas>
+  <button id="shoot" hidden aria-label="Disparar a las rocas">DISPARAR</button>
+  <section id="overlay">
+    <div class="card">
+      <h1 id="title">ESQUIVA<br>ROKS MIKE</h1>
+      <p id="message">Desliza tu dedo sobre la pantalla para mover la nave y usa <b>DISPARAR</b> para destruir los meteoritos. No dejes pasar 3 rocas.</p>
+      <button id="start">JUGAR</button>
+      <p class="small">También puedes usar las flechas del teclado.</p>
+    </div>
+  </section>
+  <script>
+    const canvas = document.querySelector('#game'), ctx = canvas.getContext('2d');
+    const overlay = document.querySelector('#overlay'), start = document.querySelector('#start'), shoot = document.querySelector('#shoot');
+    const title = document.querySelector('#title'), message = document.querySelector('#message');
+    let W, H, scale, running = false, last = 0, score = 0, best = +localStorage.neonBest || 0, time = 0, spawn = 0;
+    let ship, rocks, shots, stars, keys = {}, missed = 0, nextShot = 0, controlPointer = null;
+    function resize() { scale = Math.min(devicePixelRatio || 1, 2); W = canvas.clientWidth; H = canvas.clientHeight; canvas.width = W * scale; canvas.height = H * scale; ctx.setTransform(scale,0,0,scale,0,0); }
+    addEventListener('resize', resize); resize();
+    function reset() {
+      ship = { x: W / 2, y: H - 135, r: 19, target: W / 2 }; rocks = []; shots = []; score = 0; time = 0; spawn = 0; missed = 0; nextShot = 0;
+      stars = Array.from({length: 55}, () => ({x: Math.random()*W, y: Math.random()*H, z: .3 + Math.random()*1.7}));
+    }
+    function play() { reset(); running = true; overlay.hidden = true; shoot.hidden = false; last = performance.now(); requestAnimationFrame(loop); }
+    function finish(reason='¡CHOCASTE!') { running = false; shoot.hidden = true; best = Math.max(best, Math.floor(score)); localStorage.neonBest = best; title.textContent = reason; message.innerHTML = `Puntuación: <b>${Math.floor(score)}</b><br>Mejor marca: <b>${best}</b>`; start.textContent = 'JUGAR OTRA VEZ'; overlay.hidden = false; }
+    function rock() { const r = 13 + Math.random()*20; rocks.push({x:r + Math.random()*(W-r*2), y:-r-5, r, vy: 180 + Math.random()*120 + time*5, spin: Math.random()*6}); }
+    function update(dt) {
+      time += dt; score += dt * 10; spawn -= dt;
+      const gap = Math.max(.24, .72 - time*.012); if (spawn <= 0) { rock(); spawn = gap; }
+      let move = (keys.ArrowLeft ? -1 : 0) + (keys.ArrowRight ? 1 : 0); if (move) ship.target += move * W * dt * .9;
+      ship.target = Math.max(ship.r, Math.min(W-ship.r, ship.target)); ship.x += (ship.target-ship.x)*Math.min(1, dt*13);
+      stars.forEach(s => { s.y += 60*s.z*dt; if(s.y>H) {s.y=-3;s.x=Math.random()*W;} });
+      for (let i=shots.length-1;i>=0;i--) { shots[i].y -= 650*dt; if(shots[i].y < -15) shots.splice(i,1); }
+      for (let i=rocks.length-1;i>=0;i--) { const a=rocks[i]; a.y += a.vy*dt; a.spin += dt*2; if(a.y-a.r>H) { rocks.splice(i,1); missed++; if(missed >= 3) return finish('¡INVASIÓN!'); continue; } if(Math.hypot(a.x-ship.x,a.y-ship.y)<a.r+ship.r-3) return finish(); for(let j=shots.length-1;j>=0;j--) if(Math.hypot(a.x-shots[j].x,a.y-shots[j].y)<a.r+6) { rocks.splice(i,1); shots.splice(j,1); score += 25; break; } }
+    }
+    function draw() {
+      ctx.clearRect(0,0,W,H); ctx.fillStyle='#10122b'; ctx.fillRect(0,0,W,H);
+      stars.forEach(s=>{ctx.fillStyle=`rgba(190,220,255,${.25+s.z*.3})`;ctx.fillRect(s.x,s.y,s.z,s.z);});
+      shots.forEach(s=>{ctx.strokeStyle='#f6d366';ctx.lineWidth=4;ctx.shadowColor='#ffbf4d';ctx.shadowBlur=15;ctx.beginPath();ctx.moveTo(s.x,s.y+12);ctx.lineTo(s.x,s.y-10);ctx.stroke();ctx.shadowBlur=0;});
+      rocks.forEach(a=>{ctx.save();ctx.translate(a.x,a.y);ctx.rotate(a.spin);ctx.fillStyle='#fa777f';ctx.shadowColor='#ff5964';ctx.shadowBlur=15;ctx.beginPath();for(let i=0;i<9;i++){let r=a.r*(.75+Math.sin(i*8.3)*.16);let q=i*Math.PI*2/9; i?ctx.lineTo(Math.cos(q)*r,Math.sin(q)*r):ctx.moveTo(Math.cos(q)*r,Math.sin(q)*r)}ctx.closePath();ctx.fill();ctx.fillStyle='#b84460';ctx.beginPath();ctx.arc(-a.r*.25,-a.r*.15,a.r*.18,0,7);ctx.fill();ctx.restore();});
+      ctx.save();ctx.translate(ship.x,ship.y);ctx.shadowColor='#75f5d0';ctx.shadowBlur=22;ctx.fillStyle='#75f5d0';ctx.beginPath();ctx.moveTo(0,-25);ctx.lineTo(19,20);ctx.lineTo(0,13);ctx.lineTo(-19,20);ctx.closePath();ctx.fill();ctx.fillStyle='#dffcff';ctx.beginPath();ctx.arc(0,1,6,0,7);ctx.fill();ctx.restore();
+      ctx.fillStyle='#ffffff';ctx.font='800 22px system-ui';ctx.textAlign='left';ctx.fillText(Math.floor(score).toString().padStart(4,'0'),20,42);ctx.font='600 13px system-ui';ctx.fillStyle='#aeb7ef';ctx.fillText('MEJOR '+best,20,63);ctx.fillStyle=missed >= 2 ? '#ff838c' : '#f6d366';ctx.fillText('ROCOSAS PERDIDAS '+missed+'/3',20,85);
+    }
+    function loop(now) { if(!running)return; let dt=Math.min(.035,(now-last)/1000); last=now; update(dt); draw(); if(running)requestAnimationFrame(loop); }
+    function point(e) { const r=canvas.getBoundingClientRect(); return (e.touches?e.touches[0]:e).clientX-r.left; }
+    canvas.addEventListener('pointerdown', e=>{ if(!running) return; controlPointer=e.pointerId; canvas.setPointerCapture?.(e.pointerId); ship.target=point(e); });
+    canvas.addEventListener('pointermove', e=>{ if(running && e.pointerId===controlPointer) ship.target=point(e); });
+    canvas.addEventListener('pointerup', e=>{ if(e.pointerId===controlPointer) controlPointer=null; });
+    canvas.addEventListener('pointercancel', e=>{ if(e.pointerId===controlPointer) controlPointer=null; });
+    function fire(e) { e.preventDefault(); if(!running || performance.now()<nextShot) return; shots.push({x:ship.x,y:ship.y-26}); nextShot=performance.now()+210; }
+    shoot.addEventListener('pointerdown', fire); shoot.addEventListener('click', fire);
+    addEventListener('keydown',e=>keys[e.key]=true); addEventListener('keyup',e=>keys[e.key]=false); start.addEventListener('click',play);
+    reset(); draw();
+  </script>
+</body>
+</html>
