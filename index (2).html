@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#10122b">
+<title>Esquiva Roks Mike</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;min-height:100dvh;overflow:hidden;overscroll-behavior:none;display:grid;place-items:center;background:#080a18;color:#fff;font-family:system-ui,-apple-system,sans-serif;touch-action:none}
+#game{width:min(100vw,520px);height:100dvh;max-height:900px;display:block;background:#10122b}
+#overlay{position:fixed;inset:0;overflow:auto;display:grid;place-items:center;padding:20px;text-align:center;background:linear-gradient(#10122bdd,#10122bf2);z-index:3}
+.card{width:min(420px,100%);padding:22px 18px;border:1px solid #7c7dff;border-radius:28px;background:#171a3df2;box-shadow:0 0 45px #6d5cff66}
+h1{margin:0 0 6px;font-size:clamp(1.7rem,8vw,2.6rem);line-height:.95;letter-spacing:.04em}
+.title-rank{color:#75f5d0;font-size:1.1rem;font-weight:700;margin:4px 0 10px;text-shadow:0 0 10px #75f5d066}
+p{color:#d8dcff;line-height:1.4;margin:8px 0}
+button{border:0;border-radius:14px;padding:12px;color:#10122b;background:#75f5d0;font:800 .95rem system-ui;cursor:pointer}
+#start{width:100%;margin-top:10px;box-shadow:0 4px 0 #32a88f}
+#start:active,#shoot:active,#pauseBtn:active{transform:translateY(3px) scale(.98);box-shadow:none}
+#ships{display:grid;grid-template-columns:1fr;gap:7px;margin-top:12px;max-height:180px;overflow:auto;text-align:left}
+.ship{display:flex;align-items:center;gap:10px;width:100%;padding:9px;color:#eaf0ff;background:#252954;border:1px solid #4e5493;border-radius:14px;text-align:left;font-weight:700;font-size:.9rem}
+.ship.selected{border-color:#75f5d0;background:#1f4a51}
+.ship b{display:block;font-size:.92rem}
+.ship small{display:block;color:#c3cbff;font-weight:500;font-size:.75rem}
+.ship .cost{margin-left:auto;color:#f6d366;white-space:nowrap;font-size:.85rem}
+#shoot{position:fixed;bottom:max(18px,env(safe-area-inset-bottom));right:max(18px,env(safe-area-inset-right));width:72px;height:72px;border:3px solid #f6d366;border-radius:50%;padding:0;color:#fff;background:#d47135e8;font:900 .7rem system-ui;letter-spacing:.04em;box-shadow:0 4px 0 #87351f,0 0 22px #ff9e5b;z-index:2}
+#pauseBtn{position:fixed;top:max(10px,env(safe-area-inset-top));right:max(10px,env(safe-area-inset-top));width:48px;height:48px;border:2px solid #7c7dff;border-radius:50%;padding:0;color:#fff;background:#252954cc;font:800 1rem system-ui;z-index:2}
+.hint{font-size:.78rem;color:#9fa8df}
+[hidden]{display:none!important}
+#hud{position:fixed;top:max(8px,env(safe-area-inset-top));left:max(8px,env(safe-area-inset-left));z-index:2;pointer-events:none}
+#hudLives{display:flex;gap:5px;margin-top:4px;align-items:center}
+.life-dia{width:14px;height:14px;background:#3a3e6b;clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%);transition:background .3s}
+.life-dia.active{background:#5bc0ff;box-shadow:0 0 6px #5bc0ff}
+.no-lives-box{padding:12px;border:1px solid #ff5964;border-radius:14px;background:#2a0f14;margin:10px 0;text-align:center}
+.no-lives-box h3{color:#ff5964;margin:0 0 6px}
+.no-lives-box p{color:#ffb3b3;font-size:.85rem;margin:4px 0}
+.timer{color:#f6d366;font:800 1.1rem system-ui;margin:6px 0}
+.buy-row{display:flex;gap:8px;justify-content:center;margin-top:10px}
+.btn-coin{background:#f6d366;color:#10122b;font-size:.85rem;padding:10px 14px;box-shadow:0 3px 0 #a8831c;border:0;border-radius:12px;font-weight:800;cursor:pointer}
+.btn-ad{background:#8fb8ff;color:#10122b;font-size:.85rem;padding:10px 14px;box-shadow:0 3px 0 #4a6fa5;border:0;border-radius:12px;font-weight:800;cursor:pointer}
+.btn-coin:active,.btn-ad:active{transform:translateY(2px);box-shadow:none}
+#records{margin-top:10px;text-align:left}
+#records h3{margin:0 0 6px;font-size:.9rem;color:#aeb7ef}
+.rec-row{display:flex;justify-content:space-between;font-size:.78rem;color:#c3cbff;padding:3px 0;border-bottom:1px solid #252954}
+</style>
+</head>
+<body>
+<canvas id="game" aria-label="Juego Esquiva Roks Mike"></canvas>
+<button id="shoot" hidden aria-label="Disparar a las rocas">DISPARAR</button>
+<button id="pauseBtn" hidden aria-label="Pausar">⏸</button>
+<div id="hud" hidden>
+<div style="font:800 18px system-ui;color:#fff" id="hudScore">0000</div>
+<div style="font:700 11px system-ui;color:#aeb7ef;margin-top:2px">NIVEL <span id="hudLevel">1</span></div>
+<div id="hudLives"></div>
+</div>
+<section id="overlay">
+<div class="card">
+<h1 id="title">ESQUIVA<br>ROKS MIKE</h1>
+<p id="message">Desliza tu dedo para mover la nave. Destruye 50 rocas para subir de nivel y ganar monedas.</p>
+<div id="wallet">🪙 <b id="coins">0</b> monedas</div>
+<div id="livesDisplay"></div>
+<div id="noLivesBox" class="no-lives-box" hidden>
+<h3>🚫 ¡SIN VIDAS!</h3>
+<p>Necesitas 1 vida para jugar.</p>
+<div class="timer" id="lifeTimer"></div>
+<div class="buy-row">
+<button class="btn-coin" id="btnBuyLife">🪙 30 comprar vida</button>
+<button class="btn-ad" id="btnAdLife">📺 Anuncio = +1 vida</button>
+</div>
+</div>
+<div id="ships"></div>
+<div id="records"></div>
+<button id="start">JUGAR</button>
+<p class="hint" id="hintText">Cada nivel cambia la música y te da 10 monedas. Toca el botón ▶ para pausar.</p>
+</div>
+</section>
+<script>
+const canvas=document.querySelector('#game'),ctx=canvas.getContext('2d');
+const overlay=document.querySelector('#overlay'),start=document.querySelector('#start'),shoot=document.querySelector('#shoot'),pauseBtn=document.querySelector('#pauseBtn');
+const title=document.querySelector('#title'),message=document.querySelector('#message'),shipsEl=document.querySelector('#ships'),coinsEl=document.querySelector('#coins');
+const hud=document.querySelector('#hud'),hudScore=document.querySelector('#hudScore'),hudLevel=document.querySelector('#hudLevel'),hudLives=document.querySelector('#hudLives');
+const livesDisplay=document.querySelector('#livesDisplay'),noLivesBox=document.querySelector('#noLivesBox'),lifeTimer=document.querySelector('#lifeTimer');
+const btnBuyLife=document.querySelector('#btnBuyLife'),btnAdLife=document.querySelector('#btnAdLife'),recordsEl=document.querySelector('#records'),hintText=document.querySelector('#hintText');
+
+const SHIPS=[
+{name:'Nave Inicial',cost:0,color:'#75f5d0',desc:'Disparo simple',shots:1,spread:0,power:1},
+{name:'Nave Ráfaga',cost:40,color:'#8fb8ff',desc:'Dos disparos juntos',shots:2,spread:10,power:1},
+{name:'Nave Triple',cost:80,color:'#d891ff',desc:'Tres disparos abiertos',shots:3,spread:15,power:1},
+{name:'Nave Cañón',cost:160,color:'#ffbf65',desc:'Proyectil poderoso',shots:1,spread:0,power:2},
+{name:'Nave Rayo',cost:320,color:'#ff75bf',desc:'Ráfaga de energía',shots:3,spread:7,power:2}
+];
+
+const RANKS=[
+{k:0,label:'Novato'},
+{k:50,label:'Cadete'},
+{k:150,label:'Piloto'},
+{k:300,label:'Asesino'},
+{k:500,label:'Comandante'},
+{k:800,label:'Legendario'}
+];
+
+let W,H,scale,running=false,paused=false,last=0,time=0,spawn=0,score=0,kills=0,level=1,nextShot=0,controlPointer=null;
+let ship,rocks,shots,stars,keys={},selected=+localStorage.roksShip||0;
+let coins=+localStorage.roksCoins||0,owned=JSON.parse(localStorage.roksOwned||'[true,false,false,false,false]'),best=+localStorage.roksBest||0;
+let lives=+localStorage.roksLives||3,maxLives=3,lifeRegenUntil=+localStorage.roksRegen||0,records=JSON.parse(localStorage.roksRecords||'[]');
+let escapedRocks=0;
+let audioCtx=null,musicTimer=null;
+let flash='',flashUntil=0;
+
+function save(){
+localStorage.roksCoins=coins;localStorage.roksOwned=JSON.stringify(owned);localStorage.roksShip=selected;
+localStorage.roksBest=best;localStorage.roksLives=lives;localStorage.roksRegen=lifeRegenUntil;
+localStorage.roksRecords=JSON.stringify(records);
+}
+function rank(kills){for(let i=RANKS.length-1;i>=0;i--)if(kills>=RANKS[i].k)return RANKS[i];return RANKS[0];}
+function resize(){
+scale=Math.min(devicePixelRatio||1,2);W=canvas.clientWidth;H=canvas.clientHeight;
+canvas.width=W*scale;canvas.height=H*scale;ctx.setTransform(scale,0,0,scale,0,0);
+}
+addEventListener('resize',resize);resize();
+
+function renderShips(){
+coinsEl.textContent=coins;shipsEl.innerHTML='';
+SHIPS.forEach((s,i)=>{
+let b=document.createElement('button');b.className='ship '+(selected===i?'selected':'');
+b.innerHTML='<span style="font-size:1.6rem;color:'+s.color+'">▲</span><span><b>'+s.name+'</b><small>'+s.desc+'</small></span><span class="cost">'+(owned[i]?(selected===i?'EQUIPADA':'ELEGIR'):'🪙 '+s.cost)+'</span>';
+b.onclick=()=>chooseShip(i);shipsEl.appendChild(b);
+});
+}
+function chooseShip(i){
+if(!owned[i]){if(coins<SHIPS[i].cost){message.textContent='Necesitas '+SHIPS[i].cost+' monedas.';return;}
+coins-=SHIPS[i].cost;owned[i]=true;message.textContent='¡Nave conseguida!';
+}
+selected=i;save();renderShips();
+}
+
+function renderLives(){
+hudLives.innerHTML='';
+for(let i=0;i<maxLives;i++){
+let d=document.createElement('div');d.className='life-dia '+(i<lives?'active':'');hudLives.appendChild(d);
+}
+}
+
+function renderMenuLives(){
+livesDisplay.innerHTML='';
+let d=document.createElement('div');d.style.cssText='display:flex;gap:6px;justify-content:center;margin:8px 0;align-items:center';
+for(let i=0;i<maxLives;i++){
+let s=document.createElement('div');s.style.cssText='width:16px;height:16px;clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%);background:'+(i<lives?'#5bc0ff':'#3a3e6b')+';box-shadow:'+(i<lives?'0 0 6px #5bc0ff':'none');
+d.appendChild(s);
+}
+let t=document.createElement('span');t.style.cssText='color:#9fa8df;font-size:.85rem;font-weight:700';t.textContent=' '+lives+'/'+maxLives+' vidas';d.appendChild(t);
+livesDisplay.appendChild(d);
+}
+
+function renderRecords(){
+recordsEl.innerHTML='<h3>🏆 Mejores marcas</h3>';
+let sorted=records.slice().sort((a,b)=>b.score-a.score).slice(0,5);
+if(!sorted.length){recordsEl.innerHTML+='<div class="rec-row"><span>Sin registros aún</span></div>';return;}
+sorted.forEach((r,i)=>{
+let d=document.createElement('div');d.className='rec-row';
+d.innerHTML='<span>#'+(i+1)+'  '+String(Math.floor(r.score)).padStart(4,'0')+' pts</span><span>Niv '+r.level+' · '+r.kills+' roc</span>';
+recordsEl.appendChild(d);
+});
+}
+
+function showRank(){
+let r=rank(best);let el=document.querySelector('.title-rank');
+if(!el){el=document.createElement('div');el.className='title-rank';title.after(el);}
+el.textContent='Rango: '+r.label+' ('+best+' rocas)';
+}
+
+function resetGame(){
+ship={x:W/2,y:H-140,r:20,target:W/2};rocks=[];shots=[];score=0;kills=0;level=1;time=0;spawn=0;escapedRocks=0;
+stars=Array.from({length:58},()=>({x:Math.random()*W,y:Math.random()*H,z:.3+Math.random()*1.7}));
+}
+
+function startGame(){
+if(lives<=0){checkRegen();updateNoLives();return;}
+resetGame();running=true;paused=false;overlay.hidden=true;shoot.hidden=false;pauseBtn.hidden=false;hud.hidden=false;
+last=performance.now();renderLives();startMusic();requestAnimationFrame(loop);
+}
+
+function endGame(reason){
+running=false;stopMusic();shoot.hidden=true;pauseBtn.hidden=true;hud.hidden=true;
+lives--;save();renderLives();renderMenuLives();
+records.push({score:score,kills:kills,level:level,date:Date.now()});
+if(records.length>20)records=records.slice(-20);save();
+best=Math.max(best,kills);save();
+
+title.textContent='¡PARTIDA TERMINADA!';
+let r=rank(kills);
+message.innerHTML='Puntuación: <b>'+Math.floor(score)+'</b><br>Rocas destruidas: <b>'+kills+'</b><br>Mejor marca: <b>'+best+'</b><br>Rango: <b style="color:#75f5d0">'+r.label+'</b>';
+start.textContent='JUGAR OTRA VEZ';
+hintText.textContent='Tienes '+lives+'/'+maxLives+' vidas. Cada partida cuesta 1 vida.';
+showRank();renderShips();renderRecords();renderMenuLives();updateNoLives();
+overlay.hidden=false;
+}
+
+function addRock(){
+const r=13+Math.random()*20;
+rocks.push({x:r+Math.random()*(W-r*2),y:-r-5,r,vy:165+Math.random()*100+level*25,spin:Math.random()*6,hp:Math.random()<.12+level*.02?2:1});
+}
+
+function levelUp(){
+level++;coins+=10;save();flash='¡NIVEL '+level+'!  +10 🪙';flashUntil=performance.now()+1800;startMusic();
+}
+
+function update(dt){
+time+=dt;score+=dt*(10+level*2);spawn-=dt;
+let gap=Math.max(.2,.7-level*.045);
+if(spawn<=0){addRock();spawn=gap;}
+let move=(keys.ArrowLeft?-1:0)+(keys.ArrowRight?1:0);
+if(move)ship.target+=move*W*dt*.9;
+ship.target=Math.max(ship.r,Math.min(W-ship.r,ship.target));
+ship.x+=(ship.target-ship.x)*Math.min(1,dt*13);
+
+stars.forEach(s=>{s.y+=60*s.z*dt;if(s.y>H){s.y=-3;s.x=Math.random()*W;}});
+for(let i=shots.length-1;i>=0;i--){shots[i].y-=680*dt;if(shots[i].y<-20)shots.splice(i,1);}
+
+for(let i=rocks.length-1;i>=0;i--){
+const a=rocks[i];a.y+=a.vy*dt;a.spin+=dt*2;
+if(a.y-a.r>H){rocks.splice(i,1);escapedRocks++;if(escapedRocks>=3)return endGame('¡SE TE ESCAPARON 3 ROCAS!');continue;}
+if(Math.hypot(a.x-ship.x,a.y-ship.y)<a.r+ship.r-3)return endGame('¡CHOCASTE!');
+for(let j=shots.length-1;j>=0;j--){
+let s=shots[j];
+if(Math.hypot(a.x-s.x,a.y-s.y)<a.r+s.r){
+a.hp-=s.power;shots.splice(j,1);
+if(a.hp<=0){rocks.splice(i,1);kills++;score+=25;if(kills%50===0)levelUp();}
+break;
+}
+}
+}
+}
+
+function draw(){
+ctx.clearRect(0,0,W,H);ctx.fillStyle='#10122b';ctx.fillRect(0,0,W,H);
+stars.forEach(s=>{ctx.fillStyle='rgba(190,220,255,'+(.25+s.z*.3)+')';ctx.fillRect(s.x,s.y,s.z,s.z);});
+
+shots.forEach(s=>{
+ctx.strokeStyle=s.color;ctx.lineWidth=s.r;ctx.shadowColor=s.color;ctx.shadowBlur=15;
+ctx.beginPath();ctx.moveTo(s.x,s.y+12);ctx.lineTo(s.x,s.y-12);ctx.stroke();ctx.shadowBlur=0;
+});
+
+rocks.forEach(a=>{
+ctx.save();ctx.translate(a.x,a.y);ctx.rotate(a.spin);
+ctx.fillStyle=a.hp>1?'#bd69ff':'#fa777f';ctx.shadowColor=a.hp>1?'#9a62ff':'#ff5964';ctx.shadowBlur=15;
+ctx.beginPath();
+for(let k=0;k<9;k++){let r=a.r*(.75+Math.sin(k*8.3)*.16),q=k*Math.PI*2/9;k?ctx.lineTo(Math.cos(q)*r,Math.sin(q)*r):ctx.moveTo(Math.cos(q)*r,Math.sin(q)*r);}
+ctx.closePath();ctx.fill();ctx.restore();
+});
+
+let kind=SHIPS[selected];ctx.save();ctx.translate(ship.x,ship.y);
+ctx.shadowColor=kind.color;ctx.shadowBlur=22;ctx.fillStyle=kind.color;
+ctx.beginPath();ctx.moveTo(0,-26);ctx.lineTo(20,20);ctx.lineTo(0,13);ctx.lineTo(-20,20);ctx.closePath();ctx.fill();
+ctx.fillStyle='#eaffff';ctx.beginPath();ctx.arc(0,1,6,0,7);ctx.fill();ctx.restore();
+
+ctx.textAlign='left';ctx.fillStyle='#fff';ctx.font='800 22px system-ui';ctx.fillText(String(Math.floor(score)).padStart(4,'0'),20,42);
+ctx.font='700 13px system-ui';ctx.fillStyle='#aeb7ef';ctx.fillText('NIVEL '+level+'  ·  '+kills+' ROCAS',20,64);
+ctx.font='700 11px system-ui';ctx.fillStyle='#ff838c';ctx.fillText('Escapadas '+escapedRocks+'/3',20,82);
+
+if(performance.now()<flashUntil){
+ctx.textAlign='center';ctx.font='900 22px system-ui';ctx.fillStyle='#75f5d0';ctx.fillText(flash,W/2,H*.28);
+}
+}
+
+function loop(now){
+if(!running||paused)return;
+let dt=Math.min(.035,(now-last)/1000);last=now;update(dt);draw();
+if(running)requestAnimationFrame(loop);
+}
+
+function point(e){const r=canvas.getBoundingClientRect();return e.clientX-r.left;}
+canvas.addEventListener('pointerdown',e=>{if(!running)return;controlPointer=e.pointerId;canvas.setPointerCapture?.(e.pointerId);ship.target=point(e);});
+canvas.addEventListener('pointermove',e=>{if(running&&e.pointerId===controlPointer)ship.target=point(e);});
+canvas.addEventListener('pointerup',e=>{if(e.pointerId===controlPointer)controlPointer=null;});
+canvas.addEventListener('pointercancel',e=>{if(e.pointerId===controlPointer)controlPointer=null;});
+
+function fire(e){e.preventDefault();if(!running||performance.now()<nextShot)return;
+let k=SHIPS[selected];for(let i=0;i<k.shots;i++){let offset=(i-(k.shots-1)/2)*k.spread;shots.push({x:ship.x+offset,y:ship.y-27,r:k.power===2?7:4,power:k.power,color:k.color});}
+nextShot=performance.now()+(selected===4?130:220);
+}
+shoot.addEventListener('pointerdown',fire);shoot.addEventListener('click',fire);
+addEventListener('keydown',e=>keys[e.key]=true);addEventListener('keyup',e=>keys[e.key]=false);
+
+start.addEventListener('click',()=>{
+if(lives<=0){checkRegen();updateNoLives();return;}
+startGame();
+});
+
+pauseBtn.addEventListener('click',()=>{
+if(!running)return;paused=!paused;pauseBtn.textContent=paused?'▶':'⏸';
+if(!paused){last=performance.now();startMusic();requestAnimationFrame(loop);}else{stopMusic();}
+});
+
+function beep(freq,duration,type='sine',volume=.035){
+if(!audioCtx)return;
+let o=audioCtx.createOscillator(),g=audioCtx.createGain();
+o.type=type;o.frequency.value=freq;
+g.gain.setValueAtTime(volume,audioCtx.currentTime);
+g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+duration);
+o.connect(g).connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+duration);
+}
+
+function startMusic(){
+stopMusic();
+try{
+audioCtx=audioCtx||new (window.AudioContext||window.webkitAudioContext)();
+audioCtx.resume();
+let notes=[[220,277,330,277],[196,247,294,247],[247,311,370,311],[294,370,440,370]][(level-1)%4],n=0;
+musicTimer=setInterval(()=>{
+if(running&&!paused){
+beep(notes[n%4],.18,'triangle',.025);
+if(n%4===0)beep(notes[(n+2)%4]/2,.12,'sine',.018);
+n++;
+}
+},310);
+}catch(err){}
+}
+function stopMusic(){if(musicTimer){clearInterval(musicTimer);musicTimer=null;}}
+
+function checkRegen(){
+if(lives>=maxLives)return true;
+if(Date.now()>=lifeRegenUntil&&lifeRegenUntil>0){lives++;lifeRegenUntil=0;save();renderMenuLives();return true;}
+return false;
+}
+
+function updateNoLives(){
+if(lives>0){noLivesBox.hidden=true;start.hidden=false;return;}
+start.hidden=true;noLivesBox.hidden=false;
+let rem=Math.ceil((lifeRegenUntil-Date.now())/1000);
+if(rem>0){
+let m=Math.floor(rem/60),s=rem%60;
+lifeTimer.textContent='⏳ '+m+':'+String(s).padStart(2,'0')+' para +1 vida';
+}else if(lifeRegenUntil>0){
+lifeTimer.textContent='✅ ¡Vida lista! Toca aquí';
+lifeTimer.style.cursor='pointer';
+lifeTimer.onclick=()=>{checkRegen();updateNoLives();};
+}else{
+lifeTimer.textContent='';
+}
+}
+
+function startRegenTimer(){
+if(lives<maxLives&&lifeRegenUntil<=Date.now()){lifeRegenUntil=Date.now()+180000;save();}
+}
+
+btnBuyLife.addEventListener('click',()=>{
+if(coins>=30){coins-=30;lives=Math.min(maxLives,lives+1);save();renderShips();renderMenuLives();updateNoLives();start.hidden=false;}
+else{message.textContent='Necesitas 30 monedas.';}
+});
+
+btnAdLife.addEventListener('click',()=>{
+message.textContent='📺 Cargando anuncio...';
+setTimeout(()=>{
+lives=Math.min(maxLives,lives+1);save();renderMenuLives();updateNoLives();start.hidden=false;
+message.textContent='¡+1 vida por ver el anuncio!';
+},2000);
+});
+
+setInterval(()=>{
+if(lives<maxLives&&lifeRegenUntil>0&&Date.now()>=lifeRegenUntil){
+checkRegen();renderMenuLives();updateNoLives();
+}
+},1000);
+
+renderShips();renderRecords();renderMenuLives();showRank();updateNoLives();resetGame();draw();
+</script>
+</body>
+</html>
